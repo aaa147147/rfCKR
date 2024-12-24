@@ -1,0 +1,13 @@
+/.vs
+/.vscode
+/build
+/dist
+/GUI
+/log
+/rfCKR.pyproj
+/rfCKR.sln
+/rfCKR.spec
+/rfCKR_MainUI.spec
+/setup.py
+/temp.txt
+/参考代码
