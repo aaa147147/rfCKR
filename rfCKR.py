@@ -21,10 +21,10 @@ from rfCKR_MainUI import Ui_MainWindow
 class rfCKR(QMainWindow):
     data_received = pyqtSignal(str)
     
-    def __init__(self):
+    def __init__(self,file_handle):
         super().__init__()
-        self.serial_port = SerialPort()
-        self.fileHandle = FileHandle()
+        self.serial_port = SerialPort()  
+        self.fileHandle = file_handle
 
         # 初始化队列
         self.debugDataQueue = queue.Queue()
@@ -110,7 +110,7 @@ class rfCKR(QMainWindow):
         self.updateLogWindow(self.iqDataQueue, self.ui.iqLogEdit,self.iqDataLogFilename)
         # 高亮当前行
         self.highlightRowInTestListView(self.fileHandle.test_item_Num) 
-
+        
     def debugSendcommand(self):
         # 发送调试命令
         command = self.ui.debugInputEdit.text()
@@ -189,10 +189,17 @@ class rfCKR(QMainWindow):
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec_()
 
+
+fileHandle = FileHandle()
+
 def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
+
+    if fileHandle.result_file_df is not None:
+        fileHandle.save_test_result()
+
 
     print("未捕获的异常", file=sys.stderr)
     print("类型: ", exc_type.__name__, file=sys.stderr)
@@ -222,24 +229,20 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     msg_box.exec_()
 
     # 退出程序
-    sys.exit(1)
+    os.exit(1)
 
 if __name__ == '__main__':
-    try:
-        sys.excepthook = handle_exception
-        print("程序启动中..............")
-        # 根据硬盘序列号判断是否允许运行
-        disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
-        allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589'] #测试电脑,lixin小电脑
-        if hashlib.md5(disk_serial.encode('utf-8')).hexdigest() in allowed_serials:
-            app = QApplication(sys.argv)
-            app.setStyle("Fusion")
-            tool = rfCKR()
-            tool.show()
-            sys.exit(app.exec_())
-        else:
-            print("hello world")
-    except Exception as e: 
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        with open(f"./log/error_log_{current_time}.txt", "w") as f:
-            f.write(str(e))
+    sys.excepthook = handle_exception
+    print("程序启动中..............")
+    # 根据硬盘序列号判断是否允许运行
+    disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
+    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589'] #测试电脑,lixin小电脑
+    if hashlib.md5(disk_serial.encode('utf-8')).hexdigest() in allowed_serials:
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
+        tool = rfCKR(fileHandle)
+        tool.show()
+        sys.exit(app.exec_())
+    else:
+        print("hello world")
+
