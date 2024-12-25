@@ -101,11 +101,12 @@ class rfCKR(QMainWindow):
         # 更新单个Log窗口
         while not data_queue.empty():
             logItem = data_queue.get_nowait()
+            current_time = datetime.datetime.now().strftime("[%Y%m%d%H%M]")
 
             with open(log_filename, 'a', encoding='utf-8', errors='ignore') as file:
-                file.write(f"{logItem}\n")
+                file.write(f"{current_time}{logItem}\n")
             
-            log_edit.append(logItem)
+            log_edit.append(f"{current_time}{logItem}")
 
     def QtimerHandle(self):
         # 更新各个Log窗口

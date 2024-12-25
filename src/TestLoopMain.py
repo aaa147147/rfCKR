@@ -391,6 +391,12 @@ class TestWorker(QThread):
                     elif test_type == 'BT_RX':
                         if soc_name == 'RTL8822CS':
                             print('RTL8822CS BT_RX')
+                    #保存测试结果
+                    try:
+                        if self.fileHandle.save_test_result():
+                            self.testLoopDataQueue.put(f"测试结果保存成功")
+                    except Exception as e:
+                        self.testLoopDataQueue.put(f"测试结果保存失败...{e}")
 
             self.fileHandle.test_item_Num = self.fileHandle.test_item_Num + 1
 
@@ -398,11 +404,7 @@ class TestWorker(QThread):
         stoptTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.testLoopDataQueue.put(f"结束测试...{stoptTime}")
         
-        try:
-            if self.fileHandle.save_test_result():
-                self.testLoopDataQueue.put(f"测试结果保存成功")
-        except IOError as e:
-            self.testLoopDataQueue.put(f"{e}")
+
             
         self.IQHandle.disconnect()
         return True
