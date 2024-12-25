@@ -9,6 +9,7 @@ import wmi
 import os
 import datetime
 from PyQt5.QtCore import QItemSelectionModel
+import chardet
 
 sys.path.append('./src')
 sys.path.append('./GUI')
@@ -100,7 +101,10 @@ class rfCKR(QMainWindow):
         # 更新单个Log窗口
         while not data_queue.empty():
             logItem = data_queue.get_nowait()
-            open(log_filename, 'a').write(f"{logItem}\n")
+
+            with open(log_filename, 'a', encoding='utf-8', errors='ignore') as file:
+                file.write(f"{logItem}\n")
+            
             log_edit.append(logItem)
 
     def QtimerHandle(self):
