@@ -106,7 +106,7 @@ class rfCKR(QMainWindow):
             with open(log_filename, 'a', encoding='utf-8', errors='ignore') as file:
                 file.write(f"{current_time}{logItem}\n")
             
-            log_edit.append(f"{current_time}{logItem}")
+            log_edit.append(f"{logItem}")
 
     def QtimerHandle(self):
         # 更新各个Log窗口

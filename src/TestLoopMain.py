@@ -381,11 +381,10 @@ class TestWorker(QThread):
                     if test_type == 'WIFI_TX':
                         self.wifiTxTest(testItem)
                     elif test_type == 'WIFI_RX':
-                        if soc_name == 'RTL8822CS':
-                            self.iqDataQueue.put("测试最大接收电平...")
-                            self.wifiRxTest(testItem, 1)
-                            self.iqDataQueue.put("测试最小接收电平...")
-                            self.wifiRxTest(testItem, -1)
+                        self.iqDataQueue.put("测试最大接收电平...")
+                        self.wifiRxTest(testItem, 1)
+                        self.iqDataQueue.put("测试最小接收电平...")
+                        self.wifiRxTest(testItem, -1)
                     elif test_type == 'BT_TX':
                         print('BT_TX')
                     elif test_type == 'BT_RX':
