@@ -1,5 +1,5 @@
 import pandas as pd
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 import os
 
 class FileHandle:
@@ -137,8 +137,8 @@ class FileHandle:
         """
         # 使用QMessageBox显示消息
         msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setIcon(QMessageBox.Icon.Information)
         msg_box.setText(message)
         msg_box.setWindowTitle("信息")
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec_()
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()

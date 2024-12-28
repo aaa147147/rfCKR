@@ -2,8 +2,8 @@ import queue
 import serial
 import chardet
 import serial.tools.list_ports
-from PyQt5.QtWidgets import QMessageBox
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
 
 class ReaderThread(QThread):
@@ -162,12 +162,13 @@ class SerialPort(QObject):
     def show_message(self, message):
         """
         使用QMessageBox显示消息。
-
+        
         :param message: 要显示的消息内容
         """
+        # 使用QMessageBox显示消息
         msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setIcon(QMessageBox.Icon.Information)
         msg_box.setText(message)
         msg_box.setWindowTitle("信息")
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec_()
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()

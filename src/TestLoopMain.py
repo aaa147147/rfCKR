@@ -3,9 +3,10 @@ import time
 import re
 from datetime import datetime
 import queue
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
-from PyQt5 import QtCore
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6 import QtCore
 import requests
+import json
 
 from IQHandle import IQHandle
 import iniHandle
@@ -410,7 +411,7 @@ class TestWorker(QThread):
         try:
             DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
             DINGTALK_MESSAGE_TESTFINISH = iniHandle.get_ini_value('DingTalk', 'DINGTALK_MESSAGE_TESTFINISH')
-            requests.post(DINGTALK_WEBHOOK_URL, json=DINGTALK_MESSAGE_TESTFINISH)
+            requests.post(DINGTALK_WEBHOOK_URL, json=json.loads(DINGTALK_MESSAGE_TESTFINISH))
         except Exception as e:
             print(e)
                 

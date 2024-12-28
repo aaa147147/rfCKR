@@ -1,6 +1,7 @@
 import litepoint
 import iniHandle
-from PyQt5.QtWidgets import QFileDialog
+from PyQt6.QtWidgets import QFileDialog
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 import time
 
 class IQHandle:
@@ -28,7 +29,9 @@ class IQHandle:
 
     def reset(self):
         """复位LitePoint仪器"""
+        self.iq_data_queue.put(f'复位仪器')
         self.IQ.send_raw_command('SYS;*CLS;*RST;FORM:READ:DATA ASC')
+        
 
     def disconnect(self):
         """断开与LitePoint仪器的连接"""
@@ -38,37 +41,41 @@ class IQHandle:
             self.iq_data_queue.put(f"断开连接失败：{e}")
 
     def port_config(self, port='RF1A', port_mode='VSA&VSG'):
-        """
-        配置LitePoint仪器的端口设置，包括加载线损文件并应用到指定端口。
-        
-        :param port: 端口号，默认为'RF1A'
-        :param port_mode: 端口模式，默认为'VSA&VSG'
-        """
-        # 获取CSV文件路径
-        csv_path, _ = QFileDialog.getOpenFileName(None, "选择线损文件", "", "CSV Files (*.csv);")
-        if not csv_path:
-            raise ValueError("未选择线损文件")
+            """
+            配置LitePoint仪器的端口设置，包括加载线损文件并应用到指定端口。
+            
+            :param port: 端口号，默认为'RF1A'
+            :param port_mode: 端口模式，默认为'VSA&VSG'
+            """
+            # 获取CSV文件路径
+            csv_path, _ = QFileDialog.getOpenFileName(None, "选择线损文件", "", "CSV Files (*.csv);;")
+            if not csv_path:
+                self.show_message("未选择线损文件")
 
-        # 读取CSV文件并解析数据
-        with open(csv_path, 'r') as csv_file:
-            lines = csv_file.readlines()
-        cable_loss_list = [{'fre': int(line.split(',')[0]), 'loss': float(line.split(',')[1])} for line in lines]
+            # 读取CSV文件并解析数据
+            try:
+                with open(csv_path, 'r') as csv_file:
+                    lines = csv_file.readlines()
+                cable_loss_list = [{'fre': int(line.split(',')[0]), 'loss': float(line.split(',')[1])} for line in lines]
+            except Exception as e:
+                self.show_message(f"线损文件读取失败: {e}")
 
-        #配置端口
-        self.IQ.send_raw_command('''ROUT1;PORT:RES:ADD RF1A,VSA1''')
-        self.IQ.send_raw_command('''ROUT1;PORT:RES:ADD RF1A,VSG1''')    
+            self.iq_data_queue.put(f'仪器端口设置')
+            # 配置端口
+            self.IQ.send_raw_command('''ROUT1;PORT:RES:ADD RF1A,VSA1''')
+            self.IQ.send_raw_command('''ROUT1;PORT:RES:ADD RF1A,VSG1''')    
 
-        # 清空现有线损设置
-        self.IQ.send_raw_command('MEM:TABL:LOSS:DEL:ALL;')
+            # 清空现有线损设置
+            self.IQ.send_raw_command('MEM:TABL:LOSS:DEL:ALL;')
 
-        # 发送新的线损表
-        command = f'MEM:TABLE "RF_TABLE1";MEM:TABLE:DEFINE "FREQ,LOSS";'
-        command += 'MEMory:TABLe:INSert:POINt ' + ', '.join([f"{item['fre']}MHz,{item['loss']:.2f}" for item in cable_loss_list])
-        self.IQ.send_raw_command(command)
+            # 发送新的线损表
+            command = f'MEM:TABLE "RF_TABLE1";MEM:TABLE:DEFINE "FREQ,LOSS";'
+            command += 'MEMory:TABLe:INSert:POINt ' + ', '.join([f"{item['fre']}MHz,{item['loss']:.2f}" for item in cable_loss_list])
+            self.IQ.send_raw_command(command)
 
-        # 应用线损表到指定端口
-        self.IQ.send_raw_command('''TABL:STOR;VSA1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
-        self.IQ.send_raw_command('''TABL:STOR;VSG1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
+            # 应用线损表到指定端口
+            self.IQ.send_raw_command('''TABL:STOR;VSA1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
+            self.IQ.send_raw_command('''TABL:STOR;VSG1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
 
     def wifi_tx_measure_config(self, channel=36, band_type='5G', modulation='OFDM', bandwidth=20, frequency=5180):
         """
@@ -192,3 +199,17 @@ class IQHandle:
         self.IQ.send_raw_command(f"VSG1;wave:exec off;WLIST:WSEG1:DATA '{wave_file}';WLIST:WSEG1:SAVE;WLIST:COUNT:ENABLE WSEG1;WAVE:EXEC ON, WSEG1")
         time.sleep(3)
         self.IQ.send_raw_command("VSG1;WAVE:EXEC OFF;WLIST:COUNT:DISABLE WSEG1")
+
+    def show_message(self, message):
+        """
+        使用QMessageBox显示消息。
+        
+        :param message: 要显示的消息内容
+        """
+        # 使用QMessageBox显示消息
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setText(message)
+        msg_box.setWindowTitle("信息")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()

@@ -1,15 +1,18 @@
 import sys
 import traceback
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
-from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem
 import queue
 import hashlib
 import wmi
 import os
 import datetime
-from PyQt5.QtCore import QItemSelectionModel
 import requests
+import json
+
+from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
+from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem
+from PyQt6.QtCore import QItemSelectionModel
+
 
 sys.path.append('./src')
 sys.path.append('./GUI')
@@ -158,7 +161,7 @@ class rfCKR(QMainWindow):
             # 清除之前的高亮
             selection_model.clearSelection()
             # 选择并高亮指定行
-            selection_model.select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+            selection_model.select(index, QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
 
     def loadTestItem(self):
         # 加载测试项目并显示在列表中
@@ -226,21 +229,23 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     # 获取日志文件的绝对路径
     log_file_path = os.path.abspath(log_filename)
 
-    # 使用 QMessageBox 提示用户
-    msg_box = QMessageBox()
-    msg_box.setIcon(QMessageBox.Critical)
-    msg_box.setText(f"程序遇到未捕获的异常，请查看日志文件。\n {log_file_path}")
-    msg_box.setWindowTitle("错误")
-    msg_box.setStandardButtons(QMessageBox.Ok)
-    msg_box.exec_()
 
     #发送钉钉消息
     try:
         DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
-        DINGTALK_MESSAGE_ERROR = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
-        requests.post(DINGTALK_WEBHOOK_URL, json=DINGTALK_MESSAGE_ERROR)
+        DINGTALK_MESSAGE_ERROR = iniHandle.get_ini_value('DingTalk', 'DINGTALK_MESSAGE_ERROR')
+        requests.post(DINGTALK_WEBHOOK_URL, json=json.loads(DINGTALK_MESSAGE_ERROR))
     except Exception as e:
         print(e)
+
+    # 使用 QMessageBox 提示用户
+    msg_box = QMessageBox()
+    msg_box.setIcon(QMessageBox.Icon.Critical)
+    msg_box.setText(f"程序遇到未捕获的异常，请查看日志文件。\n {log_file_path}")
+    msg_box.setWindowTitle("错误")
+    msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+    msg_box.exec()
+
 
     # 退出程序
     os._exit(1)
@@ -256,7 +261,7 @@ if __name__ == '__main__':
         app.setStyle("Fusion")
         tool = rfCKR(fileHandle)
         tool.show()
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
     else:
         print("hello world")
 
