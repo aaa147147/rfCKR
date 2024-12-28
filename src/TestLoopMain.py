@@ -5,6 +5,7 @@ from datetime import datetime
 import queue
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 from PyQt5 import QtCore
+import requests
 
 from IQHandle import IQHandle
 import iniHandle
@@ -46,6 +47,7 @@ class TxPowerAdjuster:
     def adjustTxPower(self, txLevel, direction, accuracy):
         self.txLevelRange.sort()
         self.closeStep = sorted(self.closeStep, reverse=True)
+        print(f"功率:{txLevel},方向:{direction},正确率:{accuracy}%")
 
         self.closeIndex = 0
         rangeWidth = self.txLevelRange[1] - self.txLevelRange[0]
@@ -53,7 +55,7 @@ class TxPowerAdjuster:
             if rangeWidth <= temp:
                 self.closeIndex += 1
 
-        if accuracy > self.criteriaAccuracy:
+        if accuracy >= self.criteriaAccuracy:
             if direction == -1:
                 self.txLevelRange[1] = txLevel
             elif direction == 1:
@@ -75,7 +77,7 @@ class TxPowerAdjuster:
         if self.txLevelRange[1] - self.txLevelRange[0] <= min(self.closeStep):
             nextTxLevel = 999
 
-        print(f"当前范围: {self.txLevelRange}, 下一个测量值: {nextTxLevel}")
+        print(f"调整后的范围:{self.txLevelRange}, 下一个测量值: {nextTxLevel}")
         return nextTxLevel
 
 # 测试工作线程类
@@ -252,24 +254,24 @@ class TestWorker(QThread):
 
             testCounts = testCounts + 1
             if testCounts <= maxTestCounts: # 测试次数小于最大次数
-
+                #清包
                 self.serial_port.write(clearCMD + '\r\n')
-
+                #发包
                 self.IQHandle.wifi_rx_send_packets(waveFile, tx_level=str(nextTxLevel))  #wave_file, tx_level='-40'):
                 txLevel = nextTxLevel
-
+                #清除串口数据
                 while not self.serial_port.data_queue.empty():
                     self.serial_port.data_queue.get_nowait()
-
+                #发送查包命令
                 self.serial_port.write(getBufferCMD + '\r\n')
 
                 try:
                     waitTime = self.iniHandle.get_ini_value(testItem['socName'], 'RX_WAIT_TIME')
                 except Exception as e:
                     waitTime = 1
-
+                #等待DUT反应
                 time.sleep(float(waitTime))
-
+                #获取串口数据
                 ret = ""
                 while not self.serial_port.data_queue.empty():
                     try:
@@ -277,12 +279,12 @@ class TestWorker(QThread):
                         ret += str(data) + "$$$"
                     except queue.Empty:
                         break
-
+                #获取收到的包数量
                 correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
                 accuracy = correctValue / 1000 * 100
                 if accuracy > 100:
                     accuracy = 100
-
+                
                 self.iqDataQueue.put(f"当前发射功率:{txLevel},收包正确率:{accuracy}")
 
                 if accuracy > criteriaAccuracy:
@@ -402,10 +404,16 @@ class TestWorker(QThread):
         self.fileHandle.test_item_Num = 0
         stoptTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.testLoopDataQueue.put(f"结束测试...{stoptTime}")
-        
-
-            
         self.IQHandle.disconnect()
+
+        #发送钉钉消息
+        try:
+            DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
+            DINGTALK_MESSAGE_TESTFINISH = iniHandle.get_ini_value('DingTalk', 'DINGTALK_MESSAGE_TESTFINISH')
+            requests.post(DINGTALK_WEBHOOK_URL, json=DINGTALK_MESSAGE_TESTFINISH)
+        except Exception as e:
+            print(e)
+                
         return True
 
 # 测试主类

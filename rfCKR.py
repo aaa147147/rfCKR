@@ -9,7 +9,7 @@ import wmi
 import os
 import datetime
 from PyQt5.QtCore import QItemSelectionModel
-import chardet
+import requests
 
 sys.path.append('./src')
 sys.path.append('./GUI')
@@ -18,6 +18,7 @@ from SerialPort import SerialPort
 from FileHandle import FileHandle
 from TestLoopMain import TestLoopMain
 from rfCKR_MainUI import Ui_MainWindow
+import iniHandle
 
 class rfCKR(QMainWindow):
     data_received = pyqtSignal(str)
@@ -233,8 +234,16 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     msg_box.setStandardButtons(QMessageBox.Ok)
     msg_box.exec_()
 
+    #发送钉钉消息
+    try:
+        DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
+        DINGTALK_MESSAGE_ERROR = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
+        requests.post(DINGTALK_WEBHOOK_URL, json=DINGTALK_MESSAGE_ERROR)
+    except Exception as e:
+        print(e)
+
     # 退出程序
-    os.exit(1)
+    os._exit(1)
 
 if __name__ == '__main__':
     sys.excepthook = handle_exception
