@@ -5,6 +5,7 @@ from datetime import datetime
 import queue
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from PyQt6 import QtCore
+from PyQt6.QtWidgets import QFileDialog
 import requests
 import json
 
@@ -90,7 +91,7 @@ class TestWorker(QThread):
         self.running = False
         self.finished.emit()
         
-    def __init__(self, serial_port, fileHandle, debugDataQueue, testLoopDataQueue, iqDataQueue, parent=None):
+    def __init__(self, serial_port, fileHandle, debugDataQueue, testLoopDataQueue, iqDataQueue, cable_loss_list,parent=None):
         super().__init__(parent)
         self.parent = parent
         self.running = False
@@ -99,7 +100,8 @@ class TestWorker(QThread):
         self.debugDataQueue = debugDataQueue
         self.testLoopDataQueue = testLoopDataQueue
         self.iqDataQueue = iqDataQueue
-        self.IQHandle = IQHandle(iqDataQueue)
+        self.cable_loss_list = cable_loss_list
+        self.IQHandle = IQHandle(iqDataQueue,self.cable_loss_list)
         self.iniHandle = iniHandle
         self.paused = False
         
@@ -446,8 +448,26 @@ class TestLoopMain(QObject):
             self.testLoopDataQueue.put("新建测试结果文件出现意外............")
             return False
 
+        # 获取CSV文件路径
+        csv_path, _ = QFileDialog.getOpenFileName(None, "选择线损文件", "", "CSV Files (*.csv);;")
+        print(csv_path)
+        if not csv_path:
+            self.show_message("未选择线损文件")
+
+        # 读取CSV文件并解析数据
+        try:
+            with open(csv_path, 'r') as csv_file:
+                lines = csv_file.readlines()
+                print(lines)
+            cable_loss_list = [{'fre': int(line.split(',')[0]), 'loss': float(line.split(',')[1])} for line in lines]
+        except Exception as e:
+            self.show_message(f"线损文件读取失败: {e}")
+
+
+
+
         self.running = True
-        self.worker = TestWorker(self.serial_port, self.fileHandle, self.debugDataQueue, self.testLoopDataQueue, self.iqDataQueue)
+        self.worker = TestWorker(self.serial_port, self.fileHandle, self.debugDataQueue, self.testLoopDataQueue, self.iqDataQueue,cable_loss_list)
         self.worker.finished.connect(self.on_worker_finished)
         self.worker.start()
         return True

@@ -1,11 +1,10 @@
 import litepoint
 import iniHandle
-from PyQt6.QtWidgets import QFileDialog
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 import time
 
 class IQHandle:
-    def __init__(self, iq_data_queue):
+    def __init__(self, iq_data_queue, cable_loss_list):
         """
         初始化IQHandle类，设置LitePoint仪器对象，读取配置文件中的IP地址，并初始化数据队列。
         
@@ -21,7 +20,7 @@ class IQHandle:
         
         self.iq_data_queue = iq_data_queue
         self.iq_data_queue.put(f'IQ_LITE_POINT_IP:{self.ip_address}')
-
+        self.cable_loss_list = cable_loss_list
     def connect(self):
         self.iq_data_queue.put("连接iQ仪器...")
         self.IQ.open_lite_point_connection(self.ip_address)
@@ -47,19 +46,7 @@ class IQHandle:
             :param port: 端口号，默认为'RF1A'
             :param port_mode: 端口模式，默认为'VSA&VSG'
             """
-            # 获取CSV文件路径
-            csv_path, _ = QFileDialog.getOpenFileName(None, "选择线损文件", "", "CSV Files (*.csv);;")
-            if not csv_path:
-                self.show_message("未选择线损文件")
-
-            # 读取CSV文件并解析数据
-            try:
-                with open(csv_path, 'r') as csv_file:
-                    lines = csv_file.readlines()
-                cable_loss_list = [{'fre': int(line.split(',')[0]), 'loss': float(line.split(',')[1])} for line in lines]
-            except Exception as e:
-                self.show_message(f"线损文件读取失败: {e}")
-
+            print(f'仪器端口设置')
             self.iq_data_queue.put(f'仪器端口设置')
             # 配置端口
             self.IQ.send_raw_command('''ROUT1;PORT:RES:ADD RF1A,VSA1''')
@@ -70,7 +57,7 @@ class IQHandle:
 
             # 发送新的线损表
             command = f'MEM:TABLE "RF_TABLE1";MEM:TABLE:DEFINE "FREQ,LOSS";'
-            command += 'MEMory:TABLe:INSert:POINt ' + ', '.join([f"{item['fre']}MHz,{item['loss']:.2f}" for item in cable_loss_list])
+            command += 'MEMory:TABLe:INSert:POINt ' + ', '.join([f"{item['fre']}MHz,{item['loss']:.2f}" for item in self.cable_loss_list])
             self.IQ.send_raw_command(command)
 
             # 应用线损表到指定端口

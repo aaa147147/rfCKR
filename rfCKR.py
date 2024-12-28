@@ -9,7 +9,7 @@ import requests
 import json
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem
 from PyQt6.QtCore import QItemSelectionModel
 
@@ -22,6 +22,8 @@ from FileHandle import FileHandle
 from TestLoopMain import TestLoopMain
 from rfCKR_MainUI import Ui_MainWindow
 import iniHandle
+
+fileHandle = FileHandle()
 
 class rfCKR(QMainWindow):
     data_received = pyqtSignal(str)
@@ -51,6 +53,7 @@ class rfCKR(QMainWindow):
         self.debugDataLogFilename = f"{self.log_folder}/debugData_{current_time}.txt"
         self.testLoopDataLogFilename = f"{self.log_folder}/testLoopData_{current_time}.txt"
         self.iqDataLogFilename = f"{self.log_folder}/iqData_{current_time}.txt"
+
     def initUI(self):
         # 初始化用户界面
         self.ui = Ui_MainWindow()
@@ -198,60 +201,73 @@ class rfCKR(QMainWindow):
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec_()
 
+    def show_error_message(self, message, log_file_path):
+        # 显示错误消息对话框
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Critical)
+        msg_box.setText(f"程序遇到未捕获的异常，请查看日志文件。\n {log_file_path}")
+        msg_box.setWindowTitle("错误")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
+        # 退出程序
+        QApplication.quit()
 
-fileHandle = FileHandle()
+class ExceptionHandler(QObject):
+    show_error_signal = pyqtSignal(str, str)
 
-def handle_exception(exc_type, exc_value, exc_traceback):
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        return
+    def __init__(self, file_handle):
+        super().__init__()
+        self.file_handle = file_handle
+        self.show_error_signal.connect(self.show_error_message)
 
-    if fileHandle.result_file_df is not None:
-        fileHandle.save_test_result()
+    def handle_exception(self, exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
 
+        if self.file_handle.result_file_df is not None:
+            self.file_handle.save_test_result()
 
-    print("未捕获的异常", file=sys.stderr)
-    print("类型: ", exc_type.__name__, file=sys.stderr)
-    print("值: ", exc_value, file=sys.stderr)
-    print("回溯: ", file=sys.stderr)
-    traceback.print_tb(exc_traceback, file=sys.stderr)
+        print("未捕获的异常", file=sys.stderr)
+        print("类型: ", exc_type.__name__, file=sys.stderr)
+        print("值: ", exc_value, file=sys.stderr)
+        print("回溯: ", file=sys.stderr)
+        traceback.print_tb(exc_traceback, file=sys.stderr)
 
-    # 将异常写入日志文件
-    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"./log/error_log_{current_time}.txt"
-    with open(log_filename, "w") as f:
-        f.write("未捕获的异常\n")
-        f.write(f"类型: {exc_type.__name__}\n")
-        f.write(f"值: {exc_value}\n")
-        f.write("回溯:\n")
-        traceback.print_tb(exc_traceback, file=f)
+        # 将异常写入日志文件
+        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_filename = f"./log/error_log_{current_time}.txt"
+        with open(log_filename, "w") as f:
+            f.write("未捕获的异常\n")
+            f.write(f"类型: {exc_type.__name__}\n")
+            f.write(f"值: {exc_value}\n")
+            f.write("回溯:\n")
+            traceback.print_tb(exc_traceback, file=f)
 
-    # 获取日志文件的绝对路径
-    log_file_path = os.path.abspath(log_filename)
+        # 获取日志文件的绝对路径
+        log_file_path = os.path.abspath(log_filename)
 
+        # 发送钉钉消息
+        try:
+            DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
+            DINGTALK_MESSAGE_ERROR = iniHandle.get_ini_value('DingTalk', 'DINGTALK_MESSAGE_ERROR')
+            requests.post(DINGTALK_WEBHOOK_URL, json=json.loads(DINGTALK_MESSAGE_ERROR))
+        except Exception as e:
+            print(e)
 
-    #发送钉钉消息
-    try:
-        DINGTALK_WEBHOOK_URL = iniHandle.get_ini_value('DingTalk', 'DINGTALK_WEBHOOK_URL')
-        DINGTALK_MESSAGE_ERROR = iniHandle.get_ini_value('DingTalk', 'DINGTALK_MESSAGE_ERROR')
-        requests.post(DINGTALK_WEBHOOK_URL, json=json.loads(DINGTALK_MESSAGE_ERROR))
-    except Exception as e:
-        print(e)
+        # 使用信号将消息框的显示操作移到主线程
+        self.show_error_signal.emit(str(exc_value), log_file_path)
 
-    # 使用 QMessageBox 提示用户
-    msg_box = QMessageBox()
-    msg_box.setIcon(QMessageBox.Icon.Critical)
-    msg_box.setText(f"程序遇到未捕获的异常，请查看日志文件。\n {log_file_path}")
-    msg_box.setWindowTitle("错误")
-    msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-    msg_box.exec()
-
-
-    # 退出程序
-    os._exit(1)
+    def show_error_message(self, message, log_file_path):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Critical)
+        msg_box.setText(f"程序遇到未捕获的异常，请查看日志文件。\n {log_file_path}")
+        msg_box.setWindowTitle("错误")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.exec()
 
 if __name__ == '__main__':
-    sys.excepthook = handle_exception
+    sys.excepthook = ExceptionHandler(fileHandle).handle_exception
     print("程序启动中..............")
     # 根据硬盘序列号判断是否允许运行
     disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
@@ -264,4 +280,3 @@ if __name__ == '__main__':
         sys.exit(app.exec())
     else:
         print("hello world")
-
