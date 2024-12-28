@@ -53,7 +53,7 @@ class rfCKR(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        self.setWindowTitle('rfCKR-V02 Copyright © 2024 #EE_Lixin. All Rights Reserved.')
+        self.setWindowTitle('rfCKR-V03 Copyright © 2024 #EE_Lixin. All Rights Reserved.')
         self.setWindowIcon(QIcon('./GUI/ico/rfCKR.jpg'))
         self.ui.SDMC_Logo.setStyleSheet("""QPushButton {border-image: url('./GUI/ico/SDMC_Logo.png') 0 0 0 0 stretch stretch;}""")
 
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     print("程序启动中..............")
     # 根据硬盘序列号判断是否允许运行
     disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
-    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589'] #测试电脑,lixin小电脑
+    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589', '87d562448ac966f6356b8921933b9de3'] #测试电脑,lixin小电脑
     if hashlib.md5(disk_serial.encode('utf-8')).hexdigest() in allowed_serials:
         app = QApplication(sys.argv)
         app.setStyle("Fusion")
