@@ -12,5 +12,4 @@
 /temp.txt
 /参考代码
 upx.exe
-src/__pycache__/iniHandle.cpython-311.pyc
-src/__pycache__/TestLoopMain.cpython-311.pyc
+src/__pycache__/*
