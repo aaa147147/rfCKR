@@ -10,6 +10,7 @@ import requests
 import json
 
 from IQHandle import IQHandle
+from IQHandle_Web import IQHandle_Web
 import iniHandle
 
 # 确定给定值所属的区间
@@ -86,7 +87,7 @@ class TxPowerAdjuster:
 class TestWorker(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal()
-
+    
     def __del__(self):
         self.running = False
         self.finished.emit()
@@ -95,6 +96,7 @@ class TestWorker(QThread):
         super().__init__(parent)
         self.parent = parent
         self.running = False
+        self.iniHandle = iniHandle
         self.serial_port = serial_port
         self.fileHandle = fileHandle
         self.debugDataQueue = debugDataQueue
@@ -102,9 +104,10 @@ class TestWorker(QThread):
         self.iqDataQueue = iqDataQueue
         self.cable_loss_list = cable_loss_list
         self.IQHandle = IQHandle(iqDataQueue,self.cable_loss_list)
-        self.iniHandle = iniHandle
         self.paused = False
-        
+        if self.iniHandle.get_ini_value('DEFAULT', 'Web_Screenshot') == '1' :
+            self.IQHandle_Web = IQHandle_Web(iqDataQueue)
+
     def pauseTest(self):
         self.paused = not self.paused
         if self.paused:
@@ -197,7 +200,10 @@ class TestWorker(QThread):
                 self.iqDataQueue.put(f"测结果存在问题: {e}")
                 continue
 
-        
+        #截图
+        if hasattr(self, 'IQHandle_Web'):
+            self.IQHandle_Web.screenshot(testItem)
+        #保存结果
         testItem['powerTestValue'] = power
         testItem['freErrorTestValue'] = freqError
         testItem['evmTestValue'] = evm
