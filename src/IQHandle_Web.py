@@ -16,6 +16,7 @@ class IQHandle_Web:
         try:
             self.browser = webdriver.Chrome()
             self.browser.get('http://' + self.ip_address)
+            self.iq_data_queue.put(f"浏览器已功打开，IP地址为：{self.ip_address}，请提前设置到需要截图的页面")
         except Exception as e:
             self.iq_data_queue.put(f"打开浏览器失败：{e}")
             self.browser.quit()

@@ -92,7 +92,7 @@ class TestWorker(QThread):
         self.running = False
         self.finished.emit()
         
-    def __init__(self, serial_port, fileHandle, debugDataQueue, testLoopDataQueue, iqDataQueue, cable_loss_list,parent=None):
+    def __init__(self, serial_port, fileHandle, debugDataQueue, testLoopDataQueue, iqDataQueue, cable_loss_list,IQHandle_Web,parent=None):
         super().__init__(parent)
         self.parent = parent
         self.running = False
@@ -105,8 +105,7 @@ class TestWorker(QThread):
         self.cable_loss_list = cable_loss_list
         self.IQHandle = IQHandle(iqDataQueue,self.cable_loss_list)
         self.paused = False
-        if self.iniHandle.get_ini_value('DEFAULT', 'Web_Screenshot') == '1' :
-            self.IQHandle_Web = IQHandle_Web(iqDataQueue)
+        self.IQHandle_Web = IQHandle_Web
 
     def pauseTest(self):
         self.paused = not self.paused
@@ -440,6 +439,10 @@ class TestLoopMain(QObject):
         self.iqDataQueue.put("开始测试")
         self.worker = None
 
+        if iniHandle.get_ini_value('DEFAULT', 'Web_Screenshot') == '1' :
+            self.IQHandle_Web = IQHandle_Web(iqDataQueue)
+        else:
+            self.IQHandle_Web = 0
     # 开始测试
     def startTest(self):
         if not self.fileHandle.test_item_list:
@@ -473,7 +476,7 @@ class TestLoopMain(QObject):
 
 
         self.running = True
-        self.worker = TestWorker(self.serial_port, self.fileHandle, self.debugDataQueue, self.testLoopDataQueue, self.iqDataQueue,cable_loss_list)
+        self.worker = TestWorker(self.serial_port, self.fileHandle, self.debugDataQueue, self.testLoopDataQueue, self.iqDataQueue,cable_loss_list,self.IQHandle_Web)
         self.worker.finished.connect(self.on_worker_finished)
         self.worker.start()
         return True
@@ -503,3 +506,4 @@ class TestLoopMain(QObject):
             self.worker.running = False
             self.worker.quit()
             self.worker.wait()
+        self.IQHandle_Web = None
