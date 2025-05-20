@@ -154,18 +154,24 @@ class TestWorker(QThread):
         else:
             self.iqDataQueue.put("未找到测试信道...........")
             return False
-
+        
+        match = re.search(r'MCS(\d+)', testItem['testItemName'])
+        if match:
+            mcsValue = int(match.group(1))
+        else:
+            mcsValue = 0
+        
         freq = testItem['Frequency']
         if freq / 5000 > 1:
             bandType = '5G'
         else:
             bandType = '2G4'
 
-        return modulation, bandWidth, int(channel), int(freq), bandType
+        return modulation, bandWidth, int(channel), int(freq), bandType, mcsValue
 
     # 执行WIFI TX测试
     def wifiTxTest(self, testItem):
-        modulation, bandWidth, channel, freq, bandType = self.getTestParameter(testItem)
+        modulation, bandWidth, channel, freq, bandType, mcsValue = self.getTestParameter(testItem)
         self.iqDataQueue.put(f"modulation={modulation},bandWidth={bandWidth}M,channel=CH{channel},freq={freq}")
 
         for _ in range(3):  # 测试3次
@@ -177,7 +183,7 @@ class TestWorker(QThread):
             waitTime = self.iniHandle.get_ini_value(testItem['socName'], 'TX_WAIT_TIME')
             time.sleep(float(waitTime))
 
-            self.IQHandle.wifi_tx_measure_config(channel=channel, band_type=bandType, modulation=modulation, bandwidth=bandWidth, frequency=freq)  #channel=36, band_type='5G', modulation='OFDM', bandwidth=20, frequency=5180
+            self.IQHandle.wifi_tx_measure_config(channel=channel, band_type=bandType, modulation=modulation, mcs_value = mcsValue, bandwidth=bandWidth, frequency=freq)  #channel=36, band_type='5G', modulation='OFDM', bandwidth=20, frequency=5180
             try:
                 power, evm, freqError, minMask = self.IQHandle.get_all_wifi_tx_measure_results(modulation=modulation)
             except Exception as e:

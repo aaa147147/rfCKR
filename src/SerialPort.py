@@ -5,6 +5,7 @@ import serial.tools.list_ports
 from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
+from ADBPort import ADBPort
 
 class ReaderThread(QThread):
     data_ready = pyqtSignal(str)
@@ -59,16 +60,17 @@ class SerialPort(QObject):
     data_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self,data_ui_queue):
         """
         初始化SerialPort类，用于管理串口通信。
         """
         super().__init__()
         self.ser = None
         self.data_queue = queue.Queue()
-        self.data_ui_queue = queue.Queue()
+        self.data_ui_queue = data_ui_queue
         self.reader_thread = None
         self.running = False
+        self.adb_port = ADBPort(self.data_ui_queue,self.data_queue)
 
     def get_available_ports(self):
         """
@@ -76,7 +78,12 @@ class SerialPort(QObject):
 
         :return: 可用串口设备列表
         """
-        return [port.device for port in serial.tools.list_ports.comports()]
+        ret = [port.device for port in serial.tools.list_ports.comports()]
+        usb_devices = self.adb_port.list_usb_devices()
+        for temp in usb_devices:
+            ret.append('ADB:' + temp)
+
+        return ret
 
     def open(self, port, baudrate, data_ui_queue):
         """
@@ -87,18 +94,25 @@ class SerialPort(QObject):
         :param data_ui_queue: 用于将数据传递给UI的队列
         :return: 成功或失败的状态及消息
         """
-        if self.ser and self.ser.is_open:
-            self.close()
-        try:
-            self.ser = serial.Serial(port, baudrate, timeout=1)
-            self.running = True
-            self.reader_thread = ReaderThread(self.ser, self.data_queue, data_ui_queue)
-            self.reader_thread.data_ready.connect(self.handle_data)  # 连接信号到槽函数
-            self.reader_thread.start()
+        if "ADB:" in port:
             self.data_ui_queue = data_ui_queue
-            return True, "串口已成功打开"
-        except Exception as e:
-            return False, f"打开串口失败: {str(e)}"
+            self.adb_port.select_device(port.replace("ADB:",''))
+            self.ser = 'ADB'
+            self.running = True
+            return True, "ADB成功打开"
+        else:
+            if self.ser and self.ser.is_open:
+                self.close()
+            try:
+                self.ser = serial.Serial(port, baudrate, timeout=1)
+                self.running = True
+                self.reader_thread = ReaderThread(self.ser, self.data_queue, data_ui_queue)
+                self.reader_thread.data_ready.connect(self.handle_data)  # 连接信号到槽函数
+                self.reader_thread.start()
+                self.data_ui_queue = data_ui_queue
+                return True, "串口已成功打开"
+            except Exception as e:
+                return False, f"打开串口失败: {str(e)}"
 
     def close(self):
         """
@@ -130,14 +144,18 @@ class SerialPort(QObject):
         :param data: 要发送的数据
         :return: 成功或失败的状态及消息
         """
-        try:
-            if self.ser and self.ser.is_open:
-                self.ser.write(data.encode())
-                return True, "数据已发送"
-            return False, "串口未打开"
-        except Exception as e:
-            self.close()
-            return False, f"发送数据失败: {str(e)}"
+        if self.ser == 'ADB':
+            self.adb_port.run_adb_command(data.encode())
+            return True, "数据已发送"
+        else:
+            try:
+                if self.ser and self.ser.is_open:
+                    self.ser.write(data.encode())
+                    return True, "数据已发送"
+                return False, "串口未打开"
+            except Exception as e:
+                self.close()
+                return False, f"发送数据失败: {str(e)}"
 
     def read(self):
         """

@@ -11,7 +11,7 @@ class IQHandle:
         :param iq_data_queue: 用于传递数据的队列对象
         """
         self.IQ = litepoint._LitePointKeywords()
-        self.tx_mea_config = (None, None, None)  # 保存上一次的发射测试配置
+        self.tx_mea_config = (None, None, None, None)  # 保存上一次的发射测试配置
         self.rx_mea_config = None  # 保存上一次的接收测试配置
         
         self.ip_address = iniHandle.get_ini_value('DEFAULT', 'IQ_LITE_POINT_IP')
@@ -64,7 +64,7 @@ class IQHandle:
             self.IQ.send_raw_command('''TABL:STOR;VSA1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
             self.IQ.send_raw_command('''TABL:STOR;VSG1;RFC:USE "RF_TABLE1",RF1A;RFC:STAT ON,RF1A''')
 
-    def wifi_tx_measure_config(self, channel=36, band_type='5G', modulation='OFDM', bandwidth=20, frequency=5180):
+    def wifi_tx_measure_config(self, channel=36, band_type='5G', modulation='OFDM',  mcs_value = 0, bandwidth=20, frequency=5180):
         """
         配置LitePoint仪器进行WiFi发射测试。
         
@@ -78,8 +78,8 @@ class IQHandle:
         frequency = int(frequency)
 
         # 检查配置是否发生变化
-        if (band_type, modulation, bandwidth) != self.tx_mea_config:
-            self.tx_mea_config = (band_type, modulation, bandwidth)
+        if (band_type, modulation, bandwidth, mcs_value) != self.tx_mea_config:
+            self.tx_mea_config = (band_type, modulation, bandwidth, mcs_value)
 
             # 设置VSA技术参数
             self.IQ.config_vsa_technology_settings(
@@ -96,13 +96,21 @@ class IQHandle:
 
             # 根据调制方式设置具体参数
             if modulation == 'OFDM':
+
+                #配置OFDM的DATA或者LTF模式
+                TX_DATA_MODE_START_MCS = int(iniHandle.get_ini_value('DEFAULT', 'TX_DATA_MODE_START_MCS'))
+                if mcs_value >= TX_DATA_MODE_START_MCS:
+                    channel_est = litepoint.WifiFreqCorrect.DATA
+                elif mcs_value < TX_DATA_MODE_START_MCS:
+                    channel_est = litepoint.WifiFreqCorrect.LTF
+
                 self.IQ.config_vsa_ofdm_settings(
                     standard=litepoint.WifiOFDMStandard.A_P_N_AC_AX,
-                    freqCorrect=litepoint.WifiFreqCorrect.LTF,
+                    freqCorrect=channel_est,
                     phaseCorrect=True,
                     ampCorrect=False,
                     symCorrect=True,
-                    channelEst=litepoint.WifiFreqCorrect.LTF,
+                    channelEst=channel_est,
                     packetFormat=litepoint.WifiOFDMPacketFormat.AUTO,
                     freqSeg=None,
                     useAllSig=True,
@@ -119,6 +127,7 @@ class IQHandle:
                     equalTaps=litepoint.EqualizerTaps.OFF,
                     dcRemoval=True
                 )
+            
 
         # 设置VSA硬件参数
         self.IQ.config_vsa_hardware_settings(

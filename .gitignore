@@ -14,3 +14,4 @@
 upx.exe
 src/__pycache__/*
 screenshot/*
+TestFile/*

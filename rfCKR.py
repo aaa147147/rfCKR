@@ -30,7 +30,6 @@ class rfCKR(QMainWindow):
     
     def __init__(self,file_handle):
         super().__init__()
-        self.serial_port = SerialPort()  
         self.fileHandle = file_handle
 
         # 初始化队列
@@ -38,6 +37,7 @@ class rfCKR(QMainWindow):
         self.testLoopDataQueue = queue.Queue()
         self.iqDataQueue = queue.Queue()
         
+        self.serial_port = SerialPort(self.debugDataQueue)
         self.initUI()
         self.setupTimers()
         self.initializeQueues()
@@ -271,7 +271,7 @@ if __name__ == '__main__':
     print("程序启动中..............")
     # 根据硬盘序列号判断是否允许运行
     disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
-    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589', '87d562448ac966f6356b8921933b9de3'] #测试电脑,lixin小电脑
+    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589', '87d562448ac966f6356b8921933b9de3', 'd634707234d58f1f2ff03701feb3ad75'] #测试电脑,lixin小电脑
     if hashlib.md5(disk_serial.encode('utf-8')).hexdigest() in allowed_serials:
         app = QApplication(sys.argv)
         app.setStyle("Fusion")
