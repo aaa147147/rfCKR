@@ -93,7 +93,7 @@ class rfCKR(QMainWindow):
         self.read_timer = QTimer(self)
         self.read_timer.timeout.connect(self.QtimerHandle)
         self.read_timer.start(5)
-
+        self.timer_entry_count = 0
     def initializeQueues(self):
         # 初始化队列数据
         self.debugDataQueue.put("串口打印信息")
@@ -116,13 +116,18 @@ class rfCKR(QMainWindow):
             log_edit.append(f"{logItem}")
 
     def QtimerHandle(self):
+        self.timer_entry_count += 1
         # 更新各个Log窗口
         self.updateLogWindow(self.debugDataQueue, self.ui.debugConsoleEdit,self.debugDataLogFilename)
         self.updateLogWindow(self.testLoopDataQueue, self.ui.cmdEdit,self.testLoopDataLogFilename)
         self.updateLogWindow(self.iqDataQueue, self.ui.iqLogEdit,self.iqDataLogFilename)
         # 高亮当前行
         self.highlightRowInTestListView(self.fileHandle.test_item_Num) 
-        
+        if self.testLoopMain.running == False and self.timer_entry_count == 1000:
+            # 获取串口列表
+            self.ui.comNumComboBox.clear()
+            self.ui.comNumComboBox.addItems(self.serial_port.get_available_ports())
+            self.timer_entry_count = 0
     def debugSendcommand(self):
         # 发送调试命令
         command = self.ui.debugInputEdit.text()

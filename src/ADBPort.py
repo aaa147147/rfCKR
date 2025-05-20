@@ -111,22 +111,3 @@ class ADBPort:
             self.data_queue.put(stdout)
             return stdout
 
-# 示例用法
-if __name__ == '__main__':
-    adb_port = ADBPort()
-    
-    self.data_ui_queue.put("可用的 USB ADB 设备:")
-    usb_devices = adb_port.list_usb_devices()
-    if usb_devices:
-        for i, device in enumerate(usb_devices):
-            self.data_ui_queue.put(f"{i + 1}. {device}")
-        
-        # 尝试选择第一个设备
-        if adb_port.select_device(usb_devices[0]):
-            self.data_ui_queue.put(f"\n当前选择的设备: {adb_port.get_selected_device()}")
-            
-            # 示例：在选定设备上获取设备型号
-            self.data_ui_queue.put("\n获取设备型号:")
-            adb_port.run_adb_command(['shell', 'getprop', 'ro.product.model'])
-    else:
-        self.data_ui_queue.put("没有可用的 USB 设备进行测试。")

@@ -206,8 +206,8 @@ class TestWorker(QThread):
                 continue
 
         #截图
-        if hasattr(self, 'IQHandle_Web'):
-            self.IQHandle_Web.screenshot(testItem)
+        if self.IQHandle_Web != 0:
+            self.IQHandle_Web.screenshot(testItem['testItemName'])
         #保存结果
         testItem['powerTestValue'] = power
         testItem['freErrorTestValue'] = freqError
@@ -444,6 +444,7 @@ class TestLoopMain(QObject):
         self.testLoopDataQueue.put("开始测试")
         self.iqDataQueue.put("开始测试")
         self.worker = None
+        self.running = False
 
         if iniHandle.get_ini_value('DEFAULT', 'Web_Screenshot') == '1' :
             self.IQHandle_Web = IQHandle_Web(iqDataQueue)

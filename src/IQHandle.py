@@ -106,7 +106,7 @@ class IQHandle:
 
                 self.IQ.config_vsa_ofdm_settings(
                     standard=litepoint.WifiOFDMStandard.A_P_N_AC_AX,
-                    freqCorrect=channel_est,
+                    freqCorrect=litepoint.WifiFreqCorrect.AUTO,
                     phaseCorrect=True,
                     ampCorrect=False,
                     symCorrect=True,
