@@ -106,6 +106,10 @@ class TestWorker(QThread):
         self.IQHandle = IQHandle(iqDataQueue,self.cable_loss_list)
         self.paused = False
         self.IQHandle_Web = IQHandle_Web
+        if self.iniHandle.get_ini_value('DEFAULT', 'TX_GET_PEAK_POWER') == '1':
+            self.tx_get_peak_power_EN = True
+        else:
+            self.tx_get_peak_power_EN = False
 
     def pauseTest(self):
         self.paused = not self.paused
@@ -170,7 +174,7 @@ class TestWorker(QThread):
         return modulation, bandWidth, int(channel), int(freq), bandType, mcsValue
 
     # 执行WIFI TX测试
-    def wifiTxTest(self, testItem):
+    def wifiTxTest(self, testItem,timeout=10):
         modulation, bandWidth, channel, freq, bandType, mcsValue = self.getTestParameter(testItem)
         self.iqDataQueue.put(f"modulation={modulation},bandWidth={bandWidth}M,channel=CH{channel},freq={freq}")
 
@@ -180,15 +184,19 @@ class TestWorker(QThread):
             while self.paused:
                 QThread.msleep(100)
 
-            waitTime = self.iniHandle.get_ini_value(testItem['socName'], 'TX_WAIT_TIME')
-            time.sleep(float(waitTime))
-
+            #  配置WIFI TX测试
             self.IQHandle.wifi_tx_measure_config(channel=channel, band_type=bandType, modulation=modulation, mcs_value = mcsValue, bandwidth=bandWidth, frequency=freq)  #channel=36, band_type='5G', modulation='OFDM', bandwidth=20, frequency=5180
+
+            
+            #  获取测量结果
             try:
-                power, evm, freqError, minMask = self.IQHandle.get_all_wifi_tx_measure_results(modulation=modulation)
+                power, evm, freqError, minMask = self.IQHandle.get_all_wifi_tx_measure_results(modulation=modulation,timeout=timeout)
+                if self.tx_get_peak_power_EN == True:
+                    peak_power, peak_evm, peak_freqError, peak_minMask = self.IQHandle.get_peak_wifi_tx_measure_results(modulation=modulation)
+
             except Exception as e:
                 self.iqDataQueue.put(f"获取测量结果失败: {e}")
-                power, evm, freqError, minMask = '_','_','_','_'
+                peak_power, power, evm, freqError, minMask = '_','_','_','_','_'
                 continue
             
             self.iqDataQueue.put(f"powerTestValue={power},freErrorTestValue={freqError},evmTestValue={evm},maskMargin={minMask}")
@@ -213,6 +221,8 @@ class TestWorker(QThread):
         testItem['freErrorTestValue'] = freqError
         testItem['evmTestValue'] = evm
         testItem['maskMargin'] = minMask
+        if self.tx_get_peak_power_EN == True:
+            testItem['peakPowerTestValue'] = peak_power
         return True
 
     # 执行WIFI RX测试
@@ -284,7 +294,7 @@ class TestWorker(QThread):
                 except Exception as e:
                     waitTime = 1
                 #等待DUT反应
-                time.sleep(float(waitTime))
+                QThread.msleep(1000*float(waitTime))
                 #获取串口数据
                 ret = ""
                 while not self.serial_port.data_queue.empty():
@@ -294,7 +304,14 @@ class TestWorker(QThread):
                     except queue.Empty:
                         break
                 #获取收到的包数量
-                correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
+                try:
+                    correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
+                except Exception as e:
+                    self.iqDataQueue.put(f"无法获取收包数量: {e}")
+                    correctValue = 0
+                    nextTxLevel = txLevel
+                    continue  #收包失败，重新测试
+                
                 accuracy = correctValue / 1000 * 100
                 if accuracy > 100:
                     accuracy = 100
@@ -366,6 +383,8 @@ class TestWorker(QThread):
 
         startTime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.testLoopDataQueue.put(f"开始测试...{startTime}")
+        
+        TX_WAIT_TIME = self.iniHandle.get_ini_value(self.fileHandle.test_item_list[0]['socName'], 'TX_WAIT_TIME')
 
         self.fileHandle.test_item_Num = 0
         for testItem in self.fileHandle.test_item_list:
@@ -379,11 +398,13 @@ class TestWorker(QThread):
 
                 execCmdList = testItem['execCmd'].split('\n')
                 for execCmd in execCmdList:
+                    if execCmd.strip().replace('/r','').replace('/n','') == "":
+                        continue
                     if not self.running:
                         return True
                     try:
                         self.serial_port.write(execCmd + '\r\n')
-                        time.sleep(0.1)
+                        QThread.msleep(100)
                     except Exception as e:
                         self.debugDataQueue.put("发送命令失败....测试停止...." + str(e))
                         self.serial_port.close()
@@ -395,7 +416,7 @@ class TestWorker(QThread):
                     soc_name = testItem['socName']
 
                     if test_type == 'WIFI_TX':
-                        self.wifiTxTest(testItem)
+                        self.wifiTxTest(testItem,timeout=TX_WAIT_TIME)
                     elif test_type == 'WIFI_RX':
                         self.iqDataQueue.put("测试最大接收电平...")
                         self.wifiRxTest(testItem, 1)

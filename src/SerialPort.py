@@ -71,7 +71,6 @@ class SerialPort(QObject):
         self.reader_thread = None
         self.running = False
         self.adb_port = ADBPort(self.data_ui_queue,self.data_queue)
-
     def get_available_ports(self):
         """
         获取可用的串口列表。
@@ -120,7 +119,9 @@ class SerialPort(QObject):
 
         :return: 成功或失败的状态及消息
         """
-        if self.ser and self.ser.is_open:
+        if self.ser == 'ADB':
+            return True, "adb已成功关闭"
+        elif self.ser and self.ser.is_open:
             self.running = False
             if self.reader_thread and self.reader_thread.isRunning():
                 self.reader_thread.stop()
@@ -135,7 +136,10 @@ class SerialPort(QObject):
 
         :return: 如果串口已打开则返回True，否则返回False
         """
-        return self.ser and self.ser.is_open
+        if self.ser == 'ADB':
+            return True
+        else:
+            return self.ser and self.ser.is_open
 
     def write(self, data):
         """

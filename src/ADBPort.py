@@ -94,8 +94,11 @@ class ADBPort:
         else:
             self.data_ui_queue.put(f"错误：不支持的命令参数类型: {type(command_args)}")
             return None
-
-        full_command = ['adb', '-s', self.selected_device , 'shell'] + processed_args # Concatenate lists
+        #  单独处理 su 命令
+        if processed_args == ['su']:
+            full_command = ['adb', '-s', self.selected_device ] + ['root'] # Concatenate lists
+        else:
+            full_command = ['adb', '-s', self.selected_device , 'shell'] + processed_args # Concatenate lists
         stdout, stderr = self._execute_command(full_command)
 
         if stderr and "ADB not found" in stderr:

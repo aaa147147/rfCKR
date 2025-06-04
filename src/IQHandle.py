@@ -2,6 +2,7 @@ import litepoint
 import iniHandle
 from PyQt6.QtWidgets import QMessageBox
 import time
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 class IQHandle:
     def __init__(self, iq_data_queue, cable_loss_list):
@@ -15,6 +16,7 @@ class IQHandle:
         self.rx_mea_config = None  # 保存上一次的接收测试配置
         
         self.ip_address = iniHandle.get_ini_value('DEFAULT', 'IQ_LITE_POINT_IP')
+        self.SCPI_timeout = float(iniHandle.get_ini_value('DEFAULT', 'IQ_LITE_TIMEOUT'))
         if not self.ip_address:
             self.ip_address = '192.168.100.254'
         
@@ -23,7 +25,7 @@ class IQHandle:
         self.cable_loss_list = cable_loss_list
     def connect(self):
         self.iq_data_queue.put("连接iQ仪器...")
-        self.IQ.open_lite_point_connection(self.ip_address)
+        self.IQ.open_lite_point_connection(self.ip_address,timeout=self.SCPI_timeout)
         return self.IQ.send_raw_command("*IDN?")
 
     def reset(self):
@@ -139,25 +141,25 @@ class IQHandle:
         )
         self.IQ.send_raw_command('VSA1;CAPT:TIME 0.015')
 
-    def get_all_wifi_tx_measure_results(self, modulation='OFDM'):
+    def get_peak_wifi_tx_measure_results(self, modulation='OFDM'):
         """
         获取WiFi发射测试的所有测量结果。
         
         :param modulation: 调制方式，默认为'OFDM'
         :return: 包含功率、EVM、频偏、频谱模板数据最小值的元组
-        """
+        """  
         try:
             if modulation == 'OFDM':
                 self.IQ.send_raw_command('VSA1;init;WIFI;calc:pow 3,10;calc:txq 3,10;calc:ccdf 3,10;calc:spec 3,10')
-                result = self.IQ.send_raw_command('FETC:POW:AVER?;FETC:TXQ:OFDM:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?;FETC:OFDM:SFL:AVER:MARG?').split(';')
+                result = self.IQ.send_raw_command('FETC:POW:PEAK:MAX?;FETC:TXQ:OFDM:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?;FETC:OFDM:SFL:AVER:MARG?').split(';')
                 power = float(result[0].split(',')[1])
                 evm = float(self.IQ._convert_wifi_tx_quality_values(result[1])[0])
                 freq_error = float(self.IQ._convert_wifi_tx_quality_values(result[1])[3])
                 obw = self.IQ._convert_wifi_tx_occupied_bandwidth(result[2]) / 1000000
                 min_mask = min([float(item) for item in self.IQ._convert_wifi_tx_margin(result[3])[0:8]])
             elif modulation == 'DSSS':
-                self.IQ.send_raw_command('VSA1;init;WIFI;calc:pow 1,1;calc:txq 1,1;calc:ccdf 1,1;calc:ramp 1,1;calc:spec 1,1')
-                result = self.IQ.send_raw_command('FETC:POW:AVER?;FETC:TXQ:DSSS:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?').split(';')
+                self.IQ.send_raw_command('VSA1;init;WIFI;calc:pow 3,10;calc:txq 3,10;calc:ccdf 3,10;calc:ramp 3,10;calc:spec 3,10')
+                result = self.IQ.send_raw_command('FETC:POW:PEAK:MAX?;FETC:TXQ:DSSS:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?').split(';')
                 power = float(result[0].split(',')[1])
                 evm = float(self.IQ._convert_wifi_tx_quality_values(result[1])[0])
                 freq_error = float(self.IQ._convert_wifi_tx_quality_values(result[1])[5])
@@ -166,7 +168,63 @@ class IQHandle:
             return power, evm, freq_error, min_mask
         except Exception as err:
             print(f"获取测试结果出现意外: {err}")
-            print(result)
+            print(result)        
+    def get_all_wifi_tx_measure_results(self, modulation='OFDM', timeout=10):
+        """
+        获取WiFi发射测试的所有测量结果。
+        
+        :param modulation: 调制方式，默认为'OFDM'
+        :return: 包含功率、EVM、频偏、频谱模板数据最小值的元组
+        """
+        start_time = time.time()
+        timeout = int(timeout)
+        if modulation == 'OFDM':
+            while True:
+                if time.time() - start_time > timeout:
+                    self.iq_data_queue.put(f'超过{timeout}秒，未获取到有效信息，测试退出!')
+                    raise TimeoutError(f'超过{timeout}秒，未获取到有效信息，测试退出!')
+                
+                self.IQ.send_raw_command('VSA1;init;WIFI;calc:pow 3,10;calc:txq 3,10;calc:ccdf 3,10;calc:spec 3,10')
+                result = self.IQ.send_raw_command('FETC:POW:AVER?;FETC:TXQ:OFDM:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?;FETC:OFDM:SFL:AVER:MARG?').split(';')
+                print(result)
+                # 获取到TXQ的有效数据
+                print(f'len(result)={len(result)}')
+                if len(result) < 4:
+                    continue
+                print(f'{result[0][0]},{result[1][0]},{result[2][0]},{result[3][0]}')
+                if result[0][0] == '0' and result[1][0] == '0' and result[2][0] == '0' and result[3][0] == '0':
+                    self.iq_data_queue.put(f'成功获取到数据，耗时{time.time() - start_time}秒')
+                    break
+
+            power = float(result[0].split(',')[1])
+            evm = float(self.IQ._convert_wifi_tx_quality_values(result[1])[0])
+            freq_error = float(self.IQ._convert_wifi_tx_quality_values(result[1])[3])
+            obw = self.IQ._convert_wifi_tx_occupied_bandwidth(result[2]) / 1000000
+            min_mask = min([float(item) for item in self.IQ._convert_wifi_tx_margin(result[3])[0:8]])
+        elif modulation == 'DSSS':
+            while True:
+                if time.time() - start_time > timeout:
+                    self.iq_data_queue.put(f'超过{timeout}秒，未获取到有效信息，测试退出!')
+                    raise TimeoutError(f'超过{timeout}秒，未获取到有效信息，测试退出!')
+                
+                self.IQ.send_raw_command('VSA1;init;WIFI;calc:pow 1,1;calc:txq 1,1;calc:ccdf 1,1;calc:ramp 1,1;calc:spec 1,1')
+                result = self.IQ.send_raw_command('FETC:POW:AVER?;FETC:TXQ:DSSS:AVER?;FETC:SPEC:AVER:OBW?;FETC:SPEC:AVER:MARG?').split(';')
+                print(result)
+                # 获取到TXQ的有效数据
+                print(f'len(result)={len(result)}')
+                if len(result) < 4:
+                    continue
+                print(f'{result[0][0]},{result[1][0]},{result[2][0]},{result[3][0]}')
+                if result[0][0] == '0' and result[1][0] == '0' and result[2][0] == '0' and result[3][0] == '0':
+                    self.iq_data_queue.put(f'成功获取到数据，耗时{time.time() - start_time}秒')
+                    break
+
+            power = float(result[0].split(',')[1])
+            evm = float(self.IQ._convert_wifi_tx_quality_values(result[1])[0])
+            freq_error = float(self.IQ._convert_wifi_tx_quality_values(result[1])[5])
+            obw = self.IQ._convert_wifi_tx_occupied_bandwidth(result[2]) / 1000000
+            min_mask = min([float(item) for item in self.IQ._convert_wifi_tx_margin(result[3])[0:4]])
+        return power, evm, freq_error, min_mask
 
     def wifi_rx_measure_config(self, wave_file, frequency=5180):
         """
@@ -193,7 +251,7 @@ class IQHandle:
         """
         self.IQ.send_raw_command(f"VSG1;POW:lev {tx_level}")
         self.IQ.send_raw_command(f"VSG1;wave:exec off;WLIST:WSEG1:DATA '{wave_file}';WLIST:WSEG1:SAVE;WLIST:COUNT:ENABLE WSEG1;WAVE:EXEC ON, WSEG1")
-        time.sleep(3)
+        QThread.msleep(3000)
         self.IQ.send_raw_command("VSG1;WAVE:EXEC OFF;WLIST:COUNT:DISABLE WSEG1")
 
     def show_message(self, message):

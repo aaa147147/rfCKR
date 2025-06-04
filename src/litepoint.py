@@ -1,4 +1,5 @@
-import socket
+import pyvisa_py
+import pyvisa
 import enum
 import math
 
@@ -840,158 +841,25 @@ class _LitePointKeywords(object):
         }
 
     # region LitePoint Connection
-    @classmethod
-    def _send_raw_command(cls, cmd, repeat=5):
-        cmd = str(cmd)
-        repeat = int(repeat)
-        resp = None
-
-        while repeat:
-            resp = cls._send_tcp_data(data=cmd)
-            if not cls._error_occurred(cmd):
-                # print('Command {:s} was sent successfully'.format(cmd))
-                break
-            repeat -= 1
-
-        return resp
-
-    @classmethod
-    def _open_tester_connection(cls, ipAddress=None, port=None, timeout=None):
-        ipAddress = cls._ip if ipAddress is None else str(ipAddress)
-        port = cls._port if port is None else int(port)
-
-        cls._validate_ipAddress(ipAddress)
-        connectParams = (ipAddress, port)
-
-        try:
-            cls._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            cls._socket.connect(connectParams)
-            cls._socket.settimeout(timeout)
-        except socket.error:
-            raise AssertionError('Setup socket connection failed')
-        else:
-            cls._lock_device(ipAddress)
-
-        return cls._socket
-
-    @classmethod
-    def _close_tester_connection(cls):
-        if cls._socket:
-            cls._socket.close()
-
-        cls._unlock_device()
-
-        print('Close IQ connection success.')
-
-    @classmethod
-    def _send_tcp_data(cls, data, buffer=1024):
-        """与IQ通信的最底层函数，通过socket通信，发送SCPI"""
-        data = str(data)
-        #print("SCPI->"+data)
-        buffer = int(buffer)
-        response = ''
-        
-        if not data:
-            raise ValueError('data string is empty')
-            
-        if '?' in data:
-
-            if data[-1] != "\n":
-                data += "\n"
-
-            data = data.encode()
-            cls._socket.send(data)
-
-            try:
-                while True:
-                    resp = cls._socket.recv(buffer).decode('utf-8',errors='ignore')
-                    response += resp
-            except socket.timeout:
-                #print("SCPI recv timeout")
-                pass
-                
-        else:
-            if data[-1] != "\n":
-                data += "\n"
-
-            data = data.encode()
-            cls._socket.send(data)
-            
-        #print("SCPI Response->" + response)
-        return response
-
-    @classmethod
-    def _lock_device(cls, ipAddress, cleanStart=True, times=5):
-        if cls._locked:
-            raise TestDeviceError('Device {:s} already locked'.format(ipAddress))
-
-        count = 1
-        while count <= times:
-            deviceInfo = cls._send_tcp_data('*IDN?')
-            if 'LitePoint' in deviceInfo:
-                cls._locked = True
-                break
-
-        if not cls._locked:
-            raise TestDeviceError('Test device :{:s} is not online'.format(ipAddress))
-        else:
-            print('Lock the IQ device :{} success'.format(ipAddress))
-
-        if cleanStart:
-            cls._initialize_device()
-
-    @classmethod
-    def _initialize_device(cls):
-        """初始化仪表"""
-        try:
-            cls._send_raw_command('SYS;*CLS;*RST;FORM:READ:DATA ASC')
-        except Exception as err:
-            raise TestDeviceError('Error during initializing device: {:s}'.format(err))
-
-    @classmethod
-    def _unlock_device(cls):
-        if not cls._locked:
-            raise TestDeviceError('Not locked any device')
-
-        cls._locked = False
-
-    @classmethod
-    def _error_occurred(cls,data):
-        flag = False
-        msg = cls._send_tcp_data('ERROR:ALL?').split(',')
-        try:
-            if int(msg[0]) != 0:
-                flag = True
-                print('Send data to lite point faied :{}'.format(msg))
-            #else:
-                #print('SCPI no ERROR')
-        except Exception as err:
-            flag = True
-            print('Send data to lite point faied :{}'.format(msg))
-            
-        return flag
-
-    @classmethod
-    def _validate_ipAddress(cls, ipAddress):
-        try:
-            socket.inet_aton(ipAddress)
-
-            if ipAddress.count('.') != 3:
-                raise socket.error()
-        except socket.error:
-            raise ValueError('Invalid IP address')
 
     def open_lite_point_connection(self, ipAddress, port=None, timeout=0.2):
         """与IQ仪表建立连接"""
-        _LitePointKeywords._open_tester_connection(ipAddress, port, timeout)
+        print(pyvisa_py.common.int_to_byte(12))
+        self.pyvisa_rm = pyvisa.ResourceManager('@py')
+        self.pyvisa_inst = self.pyvisa_rm.open_resource('TCPIP::192.168.100.254::hislip0::INSTR')
+        self.pyvisa_inst.timeout = timeout*1000
+
 
     def close_lite_point_connection(self):
         """与IQ仪表断开连接"""
-        _LitePointKeywords._close_tester_connection()
+        self.pyvisa_inst.close()
 
     def send_raw_command(self, cmd):
         """向IQ仪表发送SCPI指令"""
-        return _LitePointKeywords._send_raw_command(cmd)
+        if '?' in cmd:
+            return self.pyvisa_inst.query(cmd)
+        else:
+            return self.pyvisa_inst.write(cmd)
 
     # endregion
 

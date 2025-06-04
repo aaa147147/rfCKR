@@ -1,6 +1,7 @@
 import pandas as pd
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 import os
+import iniHandle
 
 class FileHandle:
     def __init__(self):
@@ -71,6 +72,8 @@ class FileHandle:
                 'maxReceiveLevelTestValue': row['maxReceiveLevelTestValue'],
                 'maxReceiveLevelUpperLimit': row['maxReceiveLevelUpperLimit']
             }
+            if iniHandle.get_ini_value('DEFAULT', 'TX_GET_PEAK_POWER') == '1':
+                data_dict['peakPowerTestValue '] = ''
             # 清空测试数据
             data_dict['powerTestValue'] = ''
             data_dict['freErrorTestValue'] = ''
