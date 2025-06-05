@@ -276,7 +276,7 @@ if __name__ == '__main__':
     print("程序启动中..............")
     # 根据硬盘序列号判断是否允许运行
     disk_serial = wmi.WMI().Win32_DiskDrive()[0].SerialNumber
-    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', '97bb81b840885efbcac7d471d2a37589' ,'d69e795f248afa63b842c8f59d7b2959'] #测试电脑,lixin小电脑,投影电脑
+    allowed_serials = ['58bafcd4d98eaaa4821197230711e4e8', 'd77a2af599fbba0f149c197b50346dc8' ,'d69e795f248afa63b842c8f59d7b2959'] #测试电脑,lixin小电脑,投影电脑
     if hashlib.md5(disk_serial.encode('utf-8')).hexdigest() in allowed_serials:
         app = QApplication(sys.argv)
         app.setStyle("Fusion")

@@ -73,7 +73,7 @@ class FileHandle:
                 'maxReceiveLevelUpperLimit': row['maxReceiveLevelUpperLimit']
             }
             if iniHandle.get_ini_value('DEFAULT', 'TX_GET_PEAK_POWER') == '1':
-                data_dict['peakPowerTestValue '] = ''
+                data_dict['peakPowerTestValue'] = ''
             # 清空测试数据
             data_dict['powerTestValue'] = ''
             data_dict['freErrorTestValue'] = ''

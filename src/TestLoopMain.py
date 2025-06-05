@@ -190,16 +190,13 @@ class TestWorker(QThread):
             
             #  获取测量结果
             try:
-                power, evm, freqError, minMask = self.IQHandle.get_all_wifi_tx_measure_results(modulation=modulation,timeout=timeout)
-                if self.tx_get_peak_power_EN == True:
-                    peak_power, peak_evm, peak_freqError, peak_minMask = self.IQHandle.get_peak_wifi_tx_measure_results(modulation=modulation)
-
+                power, evm, freqError, minMask, peak_power = self.IQHandle.get_all_wifi_tx_measure_results(modulation=modulation,timeout=timeout,tx_get_peak_power_EN=self.tx_get_peak_power_EN)
             except Exception as e:
                 self.iqDataQueue.put(f"获取测量结果失败: {e}")
                 peak_power, power, evm, freqError, minMask = '_','_','_','_','_'
                 continue
             
-            self.iqDataQueue.put(f"powerTestValue={power},freErrorTestValue={freqError},evmTestValue={evm},maskMargin={minMask}")
+            self.iqDataQueue.put(f"powerTestValue={power},freErrorTestValue={freqError},evmTestValue={evm},maskMargin={minMask},peak_power={peak_power}")
 
             try:
                 if (testItem['powerLowerLimit'] <= power <= testItem['powerUpperLimit'] and
@@ -215,6 +212,7 @@ class TestWorker(QThread):
 
         #截图
         if self.IQHandle_Web != 0:
+            QThread.msleep(1000)
             self.IQHandle_Web.screenshot(testItem['testItemName'])
         #保存结果
         testItem['powerTestValue'] = power
@@ -229,6 +227,23 @@ class TestWorker(QThread):
     def wifiRxTest(self, testItem, direction):
         accuracy = 100
         testResult = -80
+
+        match = re.search(r'CH(\d+)', testItem['testItemName'])
+        if match:
+            channel = int(match.group(1))
+        else:
+            self.iqDataQueue.put("未找到测试信道...........")
+            return False
+        
+        match = re.search(r'ANT(\d+)', testItem['testItemName'])
+        if match:
+            ant_num = int(match.group(1))
+        else:
+            self.iqDataQueue.put("未找到天线号...........")
+            return False
+            
+        bandwidth_mapping = {'20M': 0,'40M': 1,'80M': 2,'160M': 3}
+        bandWidth = bandwidth_mapping.get(testItem['testItemName'].split('_')[3], 0)
 
         modulation = '_'.join(testItem['testItemName'].split('_')[2:5])
 
@@ -278,40 +293,82 @@ class TestWorker(QThread):
 
             testCounts = testCounts + 1
             if testCounts <= maxTestCounts: # 测试次数小于最大次数
-                #清包
-                self.serial_port.write(clearCMD + '\r\n')
-                #发包
-                self.IQHandle.wifi_rx_send_packets(waveFile, tx_level=str(nextTxLevel))  #wave_file, tx_level='-40'):
-                txLevel = nextTxLevel
-                #清除串口数据
-                while not self.serial_port.data_queue.empty():
-                    self.serial_port.data_queue.get_nowait()
-                #发送查包命令
-                self.serial_port.write(getBufferCMD + '\r\n')
+                if testItem['socName'] == 'MT7663':
+                    
+                    #清除串口数据
+                    while not self.serial_port.data_queue.empty():
+                        self.serial_port.data_queue.get_nowait()
 
-                try:
-                    waitTime = self.iniHandle.get_ini_value(testItem['socName'], 'RX_WAIT_TIME')
-                except Exception as e:
-                    waitTime = 1
-                #等待DUT反应
-                QThread.msleep(1000*float(waitTime))
-                #获取串口数据
-                ret = ""
-                while not self.serial_port.data_queue.empty():
+
+                    #开始收包
+                    self.serial_port.write(f'wifitest -r -S 10 -c {channel} -Q {ant_num} -b {bandWidth}' + '\r\n')
+                    #等待3秒
+                    QThread.msleep(3000)
+                    #开始发包
+                    self.IQHandle.wifi_rx_send_packets(waveFile, tx_level=str(nextTxLevel))
+                    txLevel = nextTxLevel
+                    #获取串口数据
+                    ret = ""
+                    while True:
+                        try:
+                            data = self.serial_port.data_queue.get_nowait()
+                            if '(success) wifi_sensitivity(Dbdc0) <---' in data:
+                                self.debugDataQueue.put(f"收包命令执行完成")
+                                QThread.msleep(1000)
+                                break
+                            #保留最后一行数据
+                            ret = data
+                        except queue.Empty:
+                            pass
+                    #获取收到的包数量
                     try:
-                        data = self.serial_port.data_queue.get_nowait()
-                        ret += str(data) + "$$$"
-                    except queue.Empty:
-                        break
-                #获取收到的包数量
-                try:
-                    correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
-                except Exception as e:
-                    self.iqDataQueue.put(f"无法获取收包数量: {e}")
-                    correctValue = 0
-                    nextTxLevel = txLevel
-                    continue  #收包失败，重新测试
-                
+                        if len(ret.split('/')) <= 2:
+                             self.iqDataQueue.put(f"无法获取收包数量: {e}")
+                             correctValue = 0
+                             nextTxLevel = txLevel
+                             continue  #收包失败，重新测试
+                        else:
+                            correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
+                    except Exception as e:
+                        self.iqDataQueue.put(f"无法获取收包数量: {e}")
+                        correctValue = 0
+                        nextTxLevel = txLevel
+                        continue  #收包失败，重新测试
+                else:
+                    #清包
+                    self.serial_port.write(clearCMD + '\r\n')
+                    #发包
+                    self.IQHandle.wifi_rx_send_packets(waveFile, tx_level=str(nextTxLevel)) 
+                    txLevel = nextTxLevel
+                    #清除串口数据
+                    while not self.serial_port.data_queue.empty():
+                        self.serial_port.data_queue.get_nowait()
+                    #发送查包命令
+                    self.serial_port.write(getBufferCMD + '\r\n')
+
+                    try:
+                        waitTime = self.iniHandle.get_ini_value(testItem['socName'], 'RX_WAIT_TIME')
+                    except Exception as e:
+                        waitTime = 1
+                    #等待DUT反应
+                    QThread.msleep(1000*int(waitTime))
+                    #获取串口数据
+                    ret = ""
+                    while not self.serial_port.data_queue.empty():
+                        try:
+                            data = self.serial_port.data_queue.get_nowait()
+                            ret += str(data) + "$$$"
+                        except queue.Empty:
+                            break
+                    #获取收到的包数量
+                    try:
+                        correctValue = int(re.search(getCorrectValueExpression, ret).group(1))
+                    except Exception as e:
+                        self.iqDataQueue.put(f"无法获取收包数量: {e}")
+                        correctValue = 0
+                        nextTxLevel = txLevel
+                        continue  #收包失败，重新测试
+                    
                 accuracy = correctValue / 1000 * 100
                 if accuracy > 100:
                     accuracy = 100
